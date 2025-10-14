@@ -1,0 +1,14 @@
+
+# 1
+# build test docker image
+docker build -t  quby-rsq-open-dev .
+
+# 2
+# run test docker
+docker run --name=quby-rsq-open-dev \
+    -p 8892:3838 quby-rsq-open-dev
+
+# test link: http://195.5.242.163:18892
+
+# build docker image for shinyproxy prod
+docker build -t shinyproxy-quby-rsq-open .

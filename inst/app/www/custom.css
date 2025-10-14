@@ -1,0 +1,138 @@
+.shiny-progress .progress {
+	position: absolute;
+	width: 100%;
+	top: 0px;
+	height: 10px;
+	margin: 0px;
+}
+
+.shiny-progress .bar {
+	opacity: 0.6;
+	transition-duration: 250ms;
+}
+
+.shiny-progress .progress-text {
+	position: absolute;
+	right: 0px;
+	height: 0px;
+	width: 240px;
+	margin-top: -12px;
+	padding: 0px;
+	margin-right: -20px;
+	opacity: 0.85;
+	color: #FFFFFF;
+}
+
+.shiny-progress .progress-text .progress-message {
+	padding: 0px 3px;
+	font-weight: bold;
+	font-size: 120%;
+}
+
+.shiny-progress .progress-text .progress-detail {
+	padding: 0px 3px;
+	font-size: 100%;
+	font-style: italic;
+}
+
+.nav-tabs-custom .nav-tabs li.active {
+	border-top-color: #9A9FA1;
+}
+
+.info-box {
+	border-radius: 5px;
+}
+
+.info-box-icon {
+  border-top-left-radius: 5px;
+  border-bottom-left-radius: 5px;
+}
+
+.HeaderSection {
+  z-index: 999999999;
+  position: absolute;
+  top: 0;
+  height: 50px;
+  line-height: 50px;
+  left: 15em;
+  color: #FFFFFF;
+  font-size: 20px;
+}
+
+
+.dropdown-menu {
+    background-color: #9A9FA1;
+    color: #000000;
+}
+
+
+.dropdown-menu>li>a {
+    color: #000000;
+}
+
+.btn-default {
+    border-color: #9A9FA1;
+}
+
+
+.btn-primary {
+    background-color: #f4f4f4 ;
+    border-color: #9A9FA1 ;
+    color: #444444 ;
+}
+
+.btn-primary:hover {
+    background-color: #E8E8E8 ;
+    border-color: #9A9FA1 ;   
+    color: #444444;
+}
+
+
+/* logo */
+.skin-blue .main-header .logo {
+    background-color: #00404D;
+}
+
+/* logo when hovered */
+.skin-blue .main-header .logo:hover {
+    background-color: #00404D;
+}
+
+/* navbar (rest of the header) */
+.skin-blue .main-header .navbar {
+    background-color: #00404D;
+}
+
+/* main sidebar */
+.skin-blue .main-sidebar {
+    background-color: #00404D;
+}
+
+
+.box.box-solid.box-primary>.box-header{
+    background-color: #00404D;
+}
+
+.box.box-solid.box-primary{
+    border-bottom-color:#00404D;
+    border-left-color:#00404D;
+    border-right-color:#00404D;
+    border-top-color:#00404D;
+}
+
+#expr-containerA .selectize-dropdown {
+   width: 200px !important;
+}
+
+
+#expr-containerB .selectize-dropdown {
+   width: 200px !important;
+}
+
+
+
+
+
+
+
+

@@ -1,0 +1,122 @@
+/*logo */
+.skin-blue .main-header .logo {
+    background-color: #00404D;
+}
+
+/* logo when hovered */
+.skin-blue .main-header .logo:hover {
+    background-color: #00404D;
+}
+
+/* navbar (rest of the header) */
+.skin-blue .main-header .navbar {
+    background-color: #00404D;
+}
+
+/* main sidebar */
+.skin-blue .main-sidebar {
+    background-color: #00404D;
+}
+
+
+.box.box-solid.box-primary>.box-header{
+    background-color: #00404D;
+}
+
+.box.box-solid.box-primary{
+    border-bottom-color:#00404D;
+    border-left-color:#00404D;
+    border-right-color:#00404D;
+    border-top-color:#00404D;
+}
+
+
+#sampleplan-help{
+  background-color:#00404D;
+  color:#ffffff;
+}
+
+#starthelp{
+  background-color:#00404D;
+  color:#ffffff;
+}
+
+#starthelp1{
+  background-color:#00404D;
+  color:#ffffff;
+}
+
+#starthelp2{
+  background-color:#00404D;
+  color:#ffffff;
+}
+
+/*.nav-tabs-custom .nav-tabs>li.active>a {
+  border-top-color: #00758C;
+}
+
+.nav-tabs-custom .nav-tabs>li>a {
+  border-top-color: #FFA413;
+  background: #FFA413;
+}
+
+.nav-tabs-custom .nav-tabs>li>a:hover {
+  border-top-color: #00758C;
+  background: #00758C;
+} */
+
+/*.nav-tabs-custom>.nav-tabs>li.active>a {
+  background: linear-gradient(to bottom left, #00404D, #FFF);
+  color: #444;
+} */
+  
+/*.nav-tabs-custom>.nav-tabs>li.active>a {
+  background: #00758C;
+  color: #444;
+}
+
+.nav-tabs-custom> .nav-tabs li.active {
+  border-top-color: #00758C;
+}
+*/
+
+.progress-bar {
+  background-color: #FFA413;
+}
+
+#shiny-notification-panel{
+  width: 300px;
+}
+
+.shiny-notification{
+  font-size: 18px;
+}
+
+
+
+
+.nav-tabs-custom>.nav-tabs {
+  border-bottom-color: #f39c12;
+}
+
+.nav-tabs-custom .nav-tabs li.active {
+  border-top-color: #f39c12;
+}
+
+.nav-tabs-custom>.nav-tabs>li.active>a {
+    border-top-color: transparent;
+    border-left-color: #f39c12;
+    border-right-color: #f39c12;
+}
+
+.nav-tabs-custom>.nav-tabs>li.active:hover>a, .nav-tabs-custom>.nav-tabs>li.active>a {
+    background-color: #fff;
+    color: #f39c12;
+    font-weight: bold;
+}
+
+
+
+.shiny-output-error-validation {
+    color: green;
+}
