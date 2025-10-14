@@ -269,7 +269,43 @@ plotDownload <- function(input, output, session, dataplot, filename = paste0("da
     }
   )
 }
+############################## Donwload PCA only ################################
 
+plotDownloadPCAUI <- function(id, label = "Download PCA plot") {
+  ns <- NS(id)
+  downloadButton(ns("downloadplot"), label)
+}
+
+plotDownloadPCA <- function(input, output, session, dataplot, filename = paste0("PCA_plot_", Sys.Date()), plottype) {
+  
+  output$downloadplot <- downloadHandler(
+    filename = function() {
+      paste0(filename, ".", plottype())
+    },
+    content = function(file) {
+      width <- 12
+      height <- 8
+      
+      plot_obj <- dataplot()
+      
+      if (is.null(plot_obj) || !inherits(plot_obj, "gg")) {
+        warning("No valid ggplot object to export.")
+        file.create(file)  # Fichier vide, évite crash
+        return()
+      }
+      
+      if (plottype() == "png") {
+        png(file, width = width, height = height, units = "in", res = 150)
+        print(plot_obj)
+        dev.off()
+      } else {
+        pdf(file, width = width, height = height)
+        print(plot_obj)
+        dev.off()
+      }
+    }
+  )
+}
 ##########################################################################
 ############################## File only ################################
 ##########################################################################
