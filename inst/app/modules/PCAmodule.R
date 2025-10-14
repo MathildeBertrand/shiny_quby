@@ -1,9 +1,11 @@
-# JS intro steps on this page: 15 -> 19
+# Ajout pour download PCA
+# Adaptation de la fonction download pour prise en charge dun objet ggplot2
+
 
 ############################### MAIN PCA module    ###############################
 modulePCAUI <- function(id, label = "PCA module") {
   ns <- NS(id)
-  
+
   tagList(
     column(
       width = 3,
@@ -79,7 +81,7 @@ modulePCAUI <- function(id, label = "PCA module") {
         closable = FALSE,
         status = "primary",
         title = div(icon("file-image-o"), div(style = "display: inline-block; padding-left: 5px", "PC#1", em("vs."), "PC#2")),
-        plotDownloadUI(ns("pca_plot_1_export")) %>%
+        plotDownloadPCAUI (ns("pca_plot_1_export")) %>%
           helper(type = "markdown", content = "pca", colour = "#269dc0", size = "l"),
         plotlyPCA2DUI(ns("pca_plot_1"))  # PC1 vs PC2
       ),
@@ -92,7 +94,7 @@ modulePCAUI <- function(id, label = "PCA module") {
         closable = FALSE,
         status = "primary",
         title = div(icon("file-image-o"), div(style = "display: inline-block; padding-left: 5px", "PC#1", em("vs."), "PC#3")),
-        plotDownloadUI(ns("pca_plot_3_export")),
+        plotDownloadPCAUI (ns("pca_plot_3_export")),
         plotlyPCA2DUI(ns("pca_plot_3"))  # PC1 vs PC3
       )
     ),
@@ -107,7 +109,7 @@ modulePCAUI <- function(id, label = "PCA module") {
         closable = FALSE,
         status = "primary",
         title = div(icon("file-image-o"), div(style = "display: inline-block; padding-left: 5px", "PC#2", em("vs."), "PC#3")),
-        plotDownloadUI(ns("pca_plot_2_export")),
+        plotDownloadPCAUI (ns("pca_plot_2_export")),
         plotlyPCA2DUI(ns("pca_plot_2"))  # PC2 vs PC3
         
       ),
@@ -160,25 +162,25 @@ modulePCAUI <- function(id, label = "PCA module") {
 
 modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
   ns <- session$ns
-  
+
   pca_data_save <- reactiveValues()
-  
+
   pca_excludeSamples <- reactiveValues(ID = NULL) # will contain selected IDs
-  
+
   # gene or isoform  ----
   fType <- reactive({
     selectInput(ns("ftype"), label = "Select data view:", choices = names(dataset()$ExpressionNormCounts), selected = 1)
   })
-  
+
   output$ftype <- renderUI({
     fType()
   })
-  
+
   selected_fType <- reactive({
     validate(need(!is.null((input$ftype)), ""))
     return(input$ftype)
   })
-  
+
   # define samples ----
   sptable <- reactive({
     sp <- newsp$sptable()$df
@@ -193,7 +195,7 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
     sp <- sp[order(sp$SampleGroup), ]
     return(sp)
   })
-  
+
   # exclude outliers by sample or by group ----
   eoutliers <- reactive({
     m <- data.frame(as.matrix(sptable()[, c("SampleID", "SampleGroup")]), stringsAsFactors = FALSE)
@@ -213,11 +215,11 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
       multiple = TRUE
     )
   })
-  
+
   output$exclude_outliers <- renderUI({
     eoutliers()
   })
-  
+
   egroups <- reactive({
     m <- data.frame(as.matrix(sptable()[, c("SampleID", "SampleGroup")]), stringsAsFactors = FALSE)
     SamplePlan <- sptable()
@@ -234,25 +236,25 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
       multiple = TRUE
     )
   })
-  
+
   output$exclude_groups <- renderUI({
     egroups()
   })
-  
+
   shape_by <- reactive({
-    sampleplan <- newsp$sptable()$df
-    othercols <- names(sampleplan)[-which(names(sampleplan) %in% c("SampleID", "SampleGroup", "GroupLabels"))]
-    if (length(othercols) > 0) {
-      selectInput(ns("shape_by"), "Add shapes by:", choices = c("none", othercols))
-    } else {
-      NULL
-    }
+     sampleplan <- newsp$sptable()$df
+     othercols <- names(sampleplan)[-which(names(sampleplan) %in% c("SampleID", "SampleGroup", "GroupLabels"))]
+     if (length(othercols) > 0) {
+       selectInput(ns("shape_by"), "Add shapes by:", choices = c("none", othercols))
+     } else {
+       NULL
+     }
   })
-  
-  output$shape_by <- renderUI({
-    shape_by()
-  })
-  
+ 
+   output$shape_by <- renderUI({
+     shape_by()
+   })
+ 
   correctbatch_by <- reactive({
     sampleplan <- newsp$sptable()$df
     othercols <- names(sampleplan)[-which(names(sampleplan) %in% c("SampleID", "SampleGroup", "GroupLabels"))]
@@ -262,11 +264,11 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
       NULL
     }
   })
-  
+ 
   output$correctbatch_by <- renderUI({
     correctbatch_by()
   })
-  
+
   # fList: gene-list or isoform-list ----
   pca_features_list <- reactive({
     validate(need(!is.null((selected_fType())), ""))
@@ -274,12 +276,12 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
     fList <- fList[rowSums(m$cpm$raw >= 1) >= min(table(sptable()$SampleGroup))]
     return(fList)
   })
-  
+
   # display label names
   labelNames <- reactive({
     input$displayLabel
   })
-  
+
   # PCA data ----
   # data is created when user clicks the <RUN> button
   # used in pca_plot(), pca_coord(), callModule(plotlyPCA), output$contrib, output$contribfile
@@ -294,7 +296,7 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
       sList[which(sIDs %in% excl)] <- FALSE
       names(sList) <- sIDs
     }
-    #    m <- data.frame(SampleID = as.character(sptable()$SampleID), SampleGroup = as.character(sptable()$SampleGroup), stringsAsFactors = FALSE)[sList, ] # keep only IDs that are TRUE in sList
+#    m <- data.frame(SampleID = as.character(sptable()$SampleID), SampleGroup = as.character(sptable()$SampleGroup), stringsAsFactors = FALSE)[sList, ] # keep only IDs that are TRUE in sList
     m <- sptable()[sList, ]
     m$SampleGroup <- factor(m$SampleGroup, levels = names(gobject()$default.colors))
     m$SampleID <- as.character(m$SampleID)
@@ -333,7 +335,7 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
       correctbatch_by = correctbatch_by
     )
   })
-  
+
   # PCA plot 2D----
   # (based on pca_data_out)
   pca_plot <- reactive({
@@ -377,9 +379,9 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
         } else {
           p <- p + geom_point(size = 7, alpha = .5) +
             geom_point(data = exclude, size = 7, color = "#000000", alpha = 0.2)
-          if (nshapeby < 4) {
-            p <- p + geom_point_interactive(aes(tooltip = snames), size = 2)
-          }
+            if (nshapeby < 4) {
+              p <- p + geom_point_interactive(aes(tooltip = snames), size = 2)
+            }
         }
         # it is necessary to <isolate> the following part, to avoid error msg when changing SamplePlan
         ftext <- ifelse(selected_fType() == "genes", "Gene", "Isoform")
@@ -400,14 +402,14 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
     )
     return(o)
   })
-  
+
   # PCA coordinates using pca_data_out ----
   pca_coord <- reactive({
     validate(need(!is.null((pca <- pca_data_out())), "")) # renamed function name from m to pca_coord
     m <- pca$coord
     return(m)
   })
-  
+
   plot3d <- reactive({
     x <- pca_data_out()$coord
     if (length((ID <- pca_excludeSamples$ID))) {
@@ -418,26 +420,26 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
     scene <- list(camera = list(eye = list(x = -1.25, y = 1.25, z = 1.25)))
     colors <- gobject()$default.colors[levels((x$SampleGroup <- factor(as.character(x$SampleGroup))))]
     p <- plotly::plot_ly(x,
-                         x = ~PC1, y = ~PC2, z = ~PC3,
-                         type = "scatter3d",
-                         mode = "markers",
-                         opacity = 1, # points not showing in safari, workaround:
-                         # https://github.com/plotly/plotly.js/issues/5158#issuecomment-696557773
-                         marker = list(color = colors[x$SampleGroup]),
-                         #      text = ~SampleID,
-                         hoverinfo = "text"
+      x = ~PC1, y = ~PC2, z = ~PC3,
+      type = "scatter3d",
+      mode = "markers",
+      opacity = 1, # points not showing in safari, workaround:
+      # https://github.com/plotly/plotly.js/issues/5158#issuecomment-696557773
+      marker = list(color = colors[x$SampleGroup]),
+#      text = ~SampleID,
+      hoverinfo = "text"
     )
     return(p)
   })
-  
+
   output$render3d <- renderPlotly({
     plot3d()
   })
-  
+
   plottype <- reactive({
     input$plot_extension
   })
-  
+
   
   plot1 <- callModule(plotlyPCA2D, "pca_plot_1",
                       pcadata = pca_coord,
@@ -469,14 +471,14 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
                       variance = reactive(pca_data_out()$variance)
   )
   
+ 
+  callModule(plotDownloadPCA, "pca_plot_1_export", reactive({ pca_plot()[[1]] }), "PCA_pc1vs2", plottype)
+  callModule(plotDownloadPCA, "pca_plot_2_export", reactive({ pca_plot()[[2]] }), "PCA_pc2vs3", plottype)
+  callModule(plotDownloadPCA, "pca_plot_3_export", reactive({ pca_plot()[[3]] }), "PCA_pc1vs3", plottype)
   
-  
-  callModule(plotDownload, "pca_plot_1_export", plot1, "PCA_pc1vs2", plottype)
-  callModule(plotDownload, "pca_plot_2_export", plot2, "PCA_pc2vs3", plottype)
-  callModule(plotDownload, "pca_plot_3_export", plot3, "PCA_pc1vs3", plottype)
-  
+
   callModule(plotDownload, "downloadsampleheatmap", heatmapplot, "heatmap_samples", plottype)
-  
+
   # PCA table ----
   output$contrib <- DT::renderDataTable(
     {
@@ -490,7 +492,7 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
       )
     )
   )
-  
+
   output$contribfile <- downloadHandler(
     filename = function() {
       "PCA_contribution.csv"
@@ -500,7 +502,7 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
       write.table(df, file = file, sep = ";", quote = FALSE, row.names = FALSE)
     }
   )
-  
+
   # Heatmap ----
   heatmapplot <- reactive({
     mycolors <- gobject()$default.colors # [1:length(unique(annot$group))]
@@ -517,17 +519,17 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
       annotation_colors = mycolors
     )
   })
-  
+
   output$render_sample_heatmap <- renderPlot({
     heatmapplot()
   })
-  
+
   # render various recap info ----
   output$pca_features_size <- renderText({
     validate(need(!is.null(pca_features_list()), ""))
     length(pca_features_list())
   })
-  
+
   output$ftype_recap <- renderText({
     ifelse(selected_fType() == "genes", "gene-scaled", "isoform-scaled")
   })
@@ -563,7 +565,7 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
       eo <- "none"
     }
   })
-  
+
   ### save plots for report ----
   report_save <- reactiveValues()
   observeEvent(input$rmd_plot, {
@@ -582,11 +584,11 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
       report_save$summary$exclude_groups <- input$exclude_groups
     }
   })
-  
+
   observeEvent(input$rmd_plot, {
     session$sendCustomMessage(type = "message", message = list(status = report_save$plot$status, header = report_save$plot$header, message = report_save$plot$message))
   })
-  
+
   rlist <- list(report_save = report_save)
   
   return(rlist)
@@ -598,7 +600,7 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
 
 plotPCAUI <- function(id, label = "Render Plot") {
   ns <- NS(id)
-  
+
   tagList(
     ggiraphOutput(ns("render"))
   )
@@ -611,7 +613,7 @@ plotPCA <- function(input, output, session, pca_coord, data, P, nb) {
     progress$set(message = "Rendering data.", detail = "Please wait...", value = 1)
     ggiraph(code = print(data()))
   })
-  
+
   return(data)
 }
 
@@ -707,18 +709,18 @@ plotlyPCA <- function(input, output, session, pcadata, pca_excludeSamples, gobje
     scene <- list(camera = list(eye = list(x = -1.25, y = 1.25, z = 1.25)))
     colors <- gobject()$default.colors[levels((x$SampleGroup <- factor(as.character(x$SampleGroup))))]
     p <- plotly::plot_ly(x,
-                         x = ~PC1, y = ~PC2, z = ~PC3,
-                         hoverinfo = "none",
-                         type = "scatter3d",
-                         mode = "markers",
-                         opacity = .5,
-                         marker = list(color = colors[x$SampleGroup])
+      x = ~PC1, y = ~PC2, z = ~PC3,
+      hoverinfo = "none",
+      type = "scatter3d",
+      mode = "markers",
+      opacity = .5,
+      marker = list(color = colors[x$SampleGroup])
     )
     p <- p %>% config(displayModeBar = FALSE, showLink = FALSE) # %>% layout(title = "3D Scatter plot", scene = scene)
-    
+
     return(p)
   })
-  
+
   output$render <- renderPlotly({
     #  progress = shiny::Progress$new()
     #  on.exit(progress$close())
