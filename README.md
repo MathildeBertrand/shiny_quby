@@ -1,3 +1,9 @@
+APPLI shiny analyse RNA Seq QUBY from DAC ICM : 
+>* https://gitlab.com/icm-institute/dac/public/quby_tutorials/-/blob/main/Quby_Bulk.md?ref_type=heads
+>* https://gitlab.com/icm-institute/dac/web/qubyrsq
+
+Repo avec correction bug sur les ACP 
+
 # QubyRSQ: Interactive web-based application for trascriptomics data exploration and analysis
 
 QubyRSQ is developed at ICM Data Analysis Core using the R-Shiny framework. Its goal is to facilitate RNAseq analysis via a user-friendly graphical interface and its usage does not require any programming experience. 
