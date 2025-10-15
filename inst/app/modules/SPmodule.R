@@ -28,7 +28,12 @@ moduleSampleplanUI <- function(id, label = "module Sample Plan") {
           data.intro = "You can download the sample plan and modify the groups or add new variables. Remember to always keep column SampleID!"
         ),
         p(),
-        withSpinner(dataTableOutput(ns("sptable")), color = "#2093bf")
+        div(
+          style = "overflow-x: auto; width: 100%;",
+          withSpinner(dataTableOutput(ns("sptable")), color = "#2093bf")
+        )
+        
+        #withSpinner(dataTableOutput(ns("sptable")), color = "#2093bf")
       ),
       column(
         width = 3,
