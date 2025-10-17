@@ -1,3 +1,60 @@
+# --- helpers (drop-in safe utilities) -----------------------------------------
+# Why: ensure fgsea stats have valid, unique names – no NAs, no duplicates.
+sanitize_ids <- function(values, ids) {
+  stopifnot(length(values) == length(ids))
+  ok <- is.finite(values) & !is.na(values) & !is.na(ids) & nzchar(as.character(ids))
+  values <- values[ok]
+  ids    <- ids[ok]
+  
+  # collapse duplicates by keeping entry with largest absolute statistic
+  if (length(values) > 0L) {
+    o <- order(abs(values), decreasing = TRUE)
+    values <- values[o]
+    ids    <- ids[o]
+    keep <- !duplicated(ids)
+    values <- values[keep]
+    ids    <- ids[keep]
+  }
+  
+  names(values) <- as.character(ids)
+  # fgsea expects decreasing order
+  values[order(values, decreasing = TRUE)]
+}
+
+# Why: robust SYMBOL -> ENTREZID mapping with explicit NA handling.
+map_symbol_to_entrez <- function(symbols, slib) {
+  suppressWarnings(
+    AnnotationDbi::mapIds(
+      x = eval(parse(text = slib)),
+      keys = unique(symbols),
+      column = "ENTREZID",
+      keytype = "SYMBOL",
+      multiVals = "first"
+    )
+  )
+}
+
+# Why: TERM2GENE must not contain NAs/dups
+sanitize_term2gene <- function(df, term_col = "cid", gene_col = "gene") {
+  df <- df[!is.na(df[[gene_col]]) & nzchar(as.character(df[[gene_col]])), , drop = FALSE]
+  df <- unique(df[, c(term_col, gene_col), drop = FALSE])
+  df
+}
+
+# Pourquoi: éviter les sélections de colonnes inexistantes.
+select_existing <- function(df, cols) {
+  keep <- intersect(cols, colnames(df))
+  if (length(keep) == 0L) {
+    df[, 0, drop = FALSE]
+  } else {
+    df[, keep, drop = FALSE]
+  }
+}
+
+
+# -----------------------------------------------------------------------------
+
+
 moduleENRICHMENTAnalysisUI <- function(id, label = "module gsea") {
   ns <- NS(id)
   tagList(
@@ -396,10 +453,12 @@ moduleENRICHMENTAnalysis <- function(input, output, session, dataset, de, projec
 
   # ENRICHMENT ANALYSIS ----
   # GMT selection ----
+  # --- GMT selection (patched) ------------------------------------------------
   pathways.hallmark <- reactive({
     if (choseGMT$usedfile == "default") {
       organism <- project$organism
       validate(need(!is.null((ID <- input$select_GMT)), ""))
+      
       if (organism == "human") {
         org <- "Homo sapiens"
       } else if (organism == "mouse") {
@@ -410,113 +469,161 @@ moduleENRICHMENTAnalysis <- function(input, output, session, dataset, de, projec
         org <- "Danio rerio"
       } else if (organism == "dog") {
         org <- "Canis lupus familiaris"
-      } else if (orgenism == "pig") org <- "Sus scrofa"
-      category <- strsplit(input$select_GMT, "[.]")[[1]][1]
+      } else if (organism == "pig") { # FIX: typo 'orgenism' -> 'organism'
+        org <- "Sus scrofa"
+      } else {
+        validate(need(FALSE, paste("Unsupported organism:", organism)))
+      }
+      
+      category    <- strsplit(input$select_GMT, "[.]")[[1]][1]
       subcategory <- strsplit(input$select_GMT, "[.]")[[1]][2]
+      
       if (is.na(subcategory)) {
         m_df <- msigdbr(species = org, category = category)
       } else {
         m_df <- msigdbr(species = org, category = category, subcategory = subcategory)
       }
-      m_term2gene <- subset(m_df, select = c("gs_id", "entrez_gene")) #
+      
+      m_term2gene <- subset(m_df, select = c("gs_id", "entrez_gene"))
+      colnames(m_term2gene) <- c("term", "gene")
+      m_term2gene <- sanitize_term2gene(m_term2gene, term_col = "term", gene_col = "gene")
+      
       m_term2name <- subset(m_df, select = c("gs_id", "gs_name"))
+      colnames(m_term2name) <- c("term", "name")
+      
     } else {
+      validate(need(!is.null(input$gmtfile$datapath), "Upload a GMT first"))
       m_df <- read.gmt(input$gmtfile$datapath)
+      
       if (input$geneIdtype == "gsymbol") {
-        entrezId <- AnnotationDbi::mapIds(x = eval(parse(text = project$slibrary)), keys = m_df$gene, column = "ENTREZID", keytype = "SYMBOL")
-        m_df$gene <- entrezId[m_df$gene]
+        entrezId <- map_symbol_to_entrez(m_df$gene, project$slibrary)
+        m_df$gene <- unname(entrezId[as.character(m_df$gene)])
       }
+      # ensure compact ids for terms
       m_df$cid <- paste0("cid", cumsum(!duplicated(m_df$term)))
-      m_term2gene <- m_df %>% dplyr::select(cid, gene) # TERM2GENE
-      m_term2name <- m_df %>% dplyr::select(cid, term) # TERM2NAME
+      
+      m_term2gene <- m_df[, c("cid", "gene")]
+      colnames(m_term2gene) <- c("term", "gene")
+      m_term2gene <- sanitize_term2gene(m_term2gene, term_col = "term", gene_col = "gene")
+      
+      m_term2name <- unique(m_df[, c("cid", "term")])
+      colnames(m_term2name) <- c("term", "name")
     }
-    return(list(
+    
+    list(
       m_term2gene = m_term2gene,
       m_term2name = m_term2name
-    ))
+    )
   })
 
   # INPUT data for enrichment analysis ----
+  # --- INPUT data for enrichment analysis (patched) ---------------------------
   features_subset_and_rank <- eventReactive(input$runAnalysis, {
-    validate(need(!is.null(pathways.hallmark()), ""))
+    validate(need(!is.null(pathways.hallmark()), "Missing GMT / TERM2GENE"))
     validate(need(!is.null((dtset <- input$sSelectDatasets)), "Loading data ..."))
     validate(need(!is.null((fType <- input$feature_type)), "Loading data ..."))
     validate(need(!is.null((res <- de$de_data_save$data[[fType]][[dtset]]$res)), "Loading data ..."))
+    
     progress <- shiny::Progress$new()
     on.exit(progress$close())
-    progress$set(message = "Rendering results.", detail = "Please wait...", value = 1)
+    progress$set(message = "Preparing ranked gene list...", detail = "Please wait...", value = 1)
+    
+    # filter for ORA
     if (input$analysis_type == "enrich") {
-      P_select <- ifelse(input$adjust_P == "1", "FDR", "PValue") # select the apropriate pvalue (adjusted or not)
+      P_select <- ifelse(input$adjust_P == "1", "FDR", "PValue")
       P_cutoff <- input$results_P_cutoff
       F_cutoff <- input$results_FC_cutoff
-      res$Status <- abs(res$logFC) > F_cutoff & res[, P_select] < P_cutoff
-      res <- res[which(res$Status > 0), ]
+      res$Status <- abs(res$logFC) > F_cutoff & res[[P_select]] < P_cutoff
+      res <- res[which(res$Status), , drop = FALSE]
     }
-    res$PValue <- ifelse(res$PValue == 0, 5e-324, res$PValue)
+    
+    # safe stats
+    res$PValue[res$PValue == 0] <- 5e-324
     res$fcSign <- sign(res$logFC)
-    res$logP <- -log10(res$PValue)
+    res$logP  <- -log10(res$PValue)
     res$metric <- res$logP / res$fcSign
+    
+    # attach SYMBOL Gene column
     if (fType == "genes") {
       res$Gene <- rownames(res)
-      if (project$keytype == "ENSEMBL") {
-        genesymbol <- AnnotationDbi::mapIds(x = eval(parse(text = project$slibrary)), keys = res$Gene, column = "SYMBOL", keytype = "ENSEMBL")
-        res$Gene <- genesymbol[res$Gene]
+      if (identical(project$keytype, "ENSEMBL")) {
+        symbols <- AnnotationDbi::mapIds(
+          x = eval(parse(text = project$slibrary)),
+          keys = res$Gene,
+          column = "SYMBOL",
+          keytype = "ENSEMBL",
+          multiVals = "first"
+        )
+        res$Gene <- unname(symbols[res$Gene])
       }
     } else {
-      res$Gene <- sapply(rownames(res), function(x) {
-        strsplit(x, ":")[[1]][1]
-      })
+      res$Gene <- vapply(rownames(res), function(x) strsplit(x, ":", fixed = TRUE)[[1]][1], FUN.VALUE = character(1))
     }
-    y <- res[, c("Gene", "metric")]
-    ranks <- deframe(y)
-    geneList <- sort(ranks, decreasing = T)
-    entrezId <- AnnotationDbi::mapIds(x = eval(parse(text = project$slibrary)), keys = names(geneList), column = "ENTREZID", keytype = "SYMBOL")
-    names(geneList) <- entrezId # this is the main vector that is used for the GSEA analyis.
-    # entrezids are ranked by log10(pvalue) and logFC sign (+/-)
-    y <- res[, c("Gene", "logFC")]
-    geneListFC <- deframe(y)
-    names(geneListFC) <- entrezId[names(geneListFC)] # this is a second vector with logFC that will be used in ridgeplot
-    return(list(
-      geneList = geneList,
-      geneListFC = geneListFC
-    ))
+    
+    # drop rows with missing Gene or metric
+    res <- res[!is.na(res$Gene) & nzchar(res$Gene) & is.finite(res$metric), , drop = FALSE]
+    
+    # build vectors
+    ranks_df <- res[, c("Gene", "metric")]
+    fc_df    <- res[, c("Gene", "logFC")]
+    
+    # map SYMBOL -> ENTREZ
+    entrez_map <- map_symbol_to_entrez(unique(ranks_df$Gene), project$slibrary)
+    ranks_ids  <- unname(entrez_map[ranks_df$Gene])
+    fc_ids     <- unname(entrez_map[fc_df$Gene])
+    
+    # sanitize for fgsea
+    geneList   <- sanitize_ids(values = ranks_df$metric, ids = ranks_ids)
+    geneListFC <- sanitize_ids(values = fc_df$logFC,   ids = fc_ids)
+    
+    validate(need(length(geneList) > 1, "The gene list is empty after ID cleaning"))
+    list(geneList = geneList, geneListFC = geneListFC)
   })
 
   # ENRICHMENT analysis ----
   # gsea/enrich(over-representation)
+  # --- ENRICHMENT analysis (tiny hardening) -----------------------------------
   analysisRes <- eventReactive(input$runAnalysis, {
     validate(need(!is.null((geneList <- features_subset_and_rank()$geneList)), "The gene list is empty"))
     validate(need(!is.null((m <- pathways.hallmark())), "There is no GMT"))
+    
     progress <- shiny::Progress$new()
     on.exit(progress$close())
-    progress$set(message = "Rendering results.", detail = "Please wait...", value = 1)
+    progress$set(message = "Running enrichment...", detail = "Please wait...", value = 1)
+    
     if (input$analysis_type == "gsea") {
-      analysisRes_int <- GSEA(geneList,
+      validate(need(!any(is.na(names(geneList))), "NAs in gene IDs"))
+      validate(need(is.numeric(geneList) && length(geneList) > 1, "Invalid stats vector"))
+      
+      analysisRes_int <- GSEA(
+        geneList,
         TERM2GENE = m$m_term2gene,
         TERM2NAME = m$m_term2name,
         exponent = 1,
         nPerm = 10000,
         minGSSize = 10,
         maxGSSize = 500,
-        pvalueCutoff = 1, # no cutoff applied
+        pvalueCutoff = 1,
         pAdjustMethod = "BH",
         verbose = TRUE,
         seed = FALSE,
         by = "fgsea"
       )
-    } else if (input$analysis_type == "enrich") {
-      analysisRes_int <- enricher(names(geneList),
+    } else {
+      analysisRes_int <- enricher(
+        names(features_subset_and_rank()$geneList),
         TERM2GENE = m$m_term2gene,
         TERM2NAME = m$m_term2name,
         minGSSize = 10,
         maxGSSize = 500,
-        pvalueCutoff = 1, # no cutoff applied
+        pvalueCutoff = 1,
         qvalueCutoff = 1,
         pAdjustMethod = "BH"
       )
     }
-    return(analysisRes_int)
+    analysisRes_int
   })
+  
 
   # RESULTS table formatted for plots
   analysisRes_form <- reactive({
@@ -554,72 +661,105 @@ moduleENRICHMENTAnalysis <- function(input, output, session, dataset, de, projec
   # FORMAT result table ----
   result_table <- eventReactive(input$runAnalysis, {
     validate(need(!is.null((analysisRes_symbol <- analysisRes_symbol())), ""))
+    
+    # Cas vide
+    res_tbl <- analysisRes_symbol@result
+    if (is.null(res_tbl) || nrow(res_tbl) == 0) {
+      if (input$analysis_type == "gsea") {
+        # colonnes basiques pour GSEA
+        out <- data.frame(
+          ID = character(), Description = character(), Pathway = character(),
+          setSize = integer(), NES = numeric(), p.adjust = numeric(),
+          stringsAsFactors = FALSE
+        )
+      } else {
+        # colonnes basiques pour ORA
+        out <- data.frame(
+          ID = character(), Description = character(), Pathway = character(),
+          GeneRatio = character(), p.adjust = numeric(), Count = integer(),
+          stringsAsFactors = FALSE
+        )
+      }
+      return(out)
+    }
+    # Formatage + ajout Pathway
     analysisRes_symbol <- analysisRes_symbol %>%
       as_tibble() %>%
-      arrange(p.adjust)
-    analysisRes_symbol <- as.data.frame(analysisRes_symbol)
-    analysisRes_symbol$Pathway <- paste0("<a href='https://www.gsea-msigdb.org/gsea/msigdb/cards/", analysisRes_symbol$Description, "' target=\"_blank\"> ", analysisRes_symbol$Description, " </a>")
+      arrange(p.adjust) %>%
+      as.data.frame()
+    analysisRes_symbol$Description <- gsub("_", " ", analysisRes_symbol$Description)
+    analysisRes_symbol$Pathway <- paste0(
+      "<a href='https://www.gsea-msigdb.org/gsea/msigdb/cards/",
+      analysisRes_symbol$Description, "' target=\"_blank\"> ",
+      analysisRes_symbol$Description, " </a>"
+    )
+    
     if (input$analysis_type == "gsea") {
-      analysisRes_symbol <- analysisRes_symbol[, c("ID", "Description", "Pathway", "setSize", "enrichmentScore", "NES", "pvalue", "p.adjust", "qvalues", "rank", "leading_edge", "core_enrichment")]
-    } else if (input$analysis_type == "enrich") {
-      analysisRes_symbol <- analysisRes_symbol[, c("ID", "Description", "Pathway", "GeneRatio", "BgRatio", "pvalue", "p.adjust", "qvalue", "geneID", "Count")]
+      cols_gsea <- c(
+        "ID","Description","Pathway","setSize","enrichmentScore","NES",
+        "pvalue","p.adjust","qvalues","rank","leading_edge","core_enrichment"
+      )
+      select_existing(analysisRes_symbol, cols_gsea)
+    } else {
+      cols_enrich <- c(
+        "ID","Description","Pathway","GeneRatio","BgRatio",
+        "pvalue","p.adjust","qvalue","geneID","Count"
+      )
+      select_existing(analysisRes_symbol, cols_enrich)
     }
-    return(analysisRes_symbol)
   })
 
   # TABLE output ----
   # https://stackoverflow.com/questions/32738975/how-can-you-add-an-explanation-to-shiny-datatable-column?noredirect=1&lq=1
   # https://stackoverflow.com/questions/31813601/using-renderdatatable-within-renderui-in-shiny
   output$analysis_results_out_gsea <- DT::renderDataTable({
-    progress <- shiny::Progress$new()
-    on.exit(progress$close())
-    progress$set(message = "Rendering results.", detail = "Please wait...", value = 1)
-    DT::datatable(result_table(),
-      rownames = FALSE,
-      selection = "single",
-      style = "bootstrap",
-      class = "table-bordered",
-      escape = F,
+    df <- result_table()
+    if (nrow(df) == 0) {
+      return(
+        DT::datatable(df, rownames = FALSE, escape = FALSE,
+                      options = list(dom = 't', language = list(emptyTable = "Aucun résultat")))
+      )
+    }
+    DT::datatable(
+      df,
+      rownames = FALSE, selection = "single", style = "bootstrap",
+      class = "table-bordered", escape = FALSE,
       options = list(
-        pagingType = "full",
-        searching = TRUE,
-        scrollX = TRUE,
-        scrollY = "400px",
+        pagingType = "full", searching = TRUE, scrollX = TRUE, scrollY = "400px",
         columnDefs = list(
-          list(targets = c(0, 1, 9, 10), visible = FALSE),
-          list(
-            targets = c(11),
-            render = JS(
-              "function(data, type, row, meta) {",
-              "return type === 'display' && data != null && data.length > 13 ?",
-              "'<span title=\"' + data + '\">' + data.substr(0, 13) + '...</span>' : data;",
-              "}"
-            )
-          )
+          list(targets = which(colnames(df) %in% c("ID","Description","rank","leading_edge")) - 1L, visible = FALSE)
         ),
-        initComplete = JS(
-          "function(settings, json) {",
-          "$(this.api().table().header()).css({'background-color': '#00404D', 'color': '#fff'});",
-          "}"
+        initComplete = htmlwidgets::JS(
+          "function(settings, json){$(this.api().table().header()).css({'background-color':'#00404D','color':'#fff'});}"
         )
-      ),
-      callback = htmlwidgets::JS("
-                   var tips = ['','','Pathway',
-                                'Number of genes in the gene set after filtering out those genes not in the expression dataset', 
-                                'ES reflects the degree to which a gene set is overrepresented at the top or bottom of a ranked list of genes', 
-                                'Normalized Enrichment Score (accounts for differences in gene set size)',
-                                'Statistical significance of the enrichment score',
-                                'FDR',
-                                'Q-value',
-                                '',
-                                '',
-                                'Leading edge: Subset of genes that contributes most to the enrichment result'],
-                   header = table.columns().header();
-                   for (var i = 0; i < tips.length; i++) {
-                      $(header[i]).attr('title', tips[i]);
-                   }")
-    ) %>% formatRound(c("enrichmentScore", "NES", "pvalue", "p.adjust", "qvalues"), 5)
+      )
+    ) %>% DT::formatRound(intersect(c("enrichmentScore","NES","pvalue","p.adjust","qvalues"), colnames(df)), 5)
   })
+  
+  output$analysis_results_out_enrich <- DT::renderDataTable({
+    df <- result_table()
+    if (nrow(df) == 0) {
+      return(
+        DT::datatable(df, rownames = FALSE, escape = FALSE,
+                      options = list(dom = 't', language = list(emptyTable = "Aucun résultat")))
+      )
+    }
+    DT::datatable(
+      df,
+      rownames = FALSE, selection = "single", style = "bootstrap",
+      class = "table-bordered", escape = FALSE,
+      options = list(
+        pagingType = "full", searching = TRUE, scrollX = TRUE, scrollY = "400px",
+        columnDefs = list(
+          list(targets = which(colnames(df) %in% c("ID","Description")) - 1L, visible = FALSE)
+        ),
+        initComplete = htmlwidgets::JS(
+          "function(settings, json){$(this.api().table().header()).css({'background-color':'#3c8dbc','color':'#fff'});}"
+        )
+      )
+    ) %>% DT::formatRound(intersect(c("pvalue","p.adjust","qvalue"), colnames(df)), 5)
+  })
+  
 
   output$analysis_results_out_enrich <- DT::renderDataTable({
     DT::datatable(result_table(),
@@ -687,21 +827,147 @@ moduleENRICHMENTAnalysis <- function(input, output, session, dataset, de, projec
   })
 
   # Dotplot ----
+  #resdotplot <- reactive({
+  #  validate(need(!is.null((analysisRes <- analysisRes_form())), ""))
+  #  p <- dotplot(analysisRes, showCategory = input$dotbarinput) +
+  #    scale_y_discrete(labels = function(x) str_wrap(x, width = 70))
+  #  return(p)
+  #})
+  
+  #output$resdotplot <- renderPlot({
+  #  resdotplot()
+  #})
+  
+  #output$resdotplot_px <- renderUI({
+  #  plotOutput(outputId = ns("resdotplot"), height = dotbarplot_height())
+  #})
+  # CSS: autoriser le débordement du plotOutput
+  
+  # Modification car non affichage du dotplot
   resdotplot <- reactive({
-    validate(need(!is.null((analysisRes <- analysisRes_form())), ""))
-    p <- dotplot(analysisRes, showCategory = input$dotbarinput) +
-      scale_y_discrete(labels = function(x) str_wrap(x, width = 70))
-    return(p)
+    validate(need(!is.null((ar <- analysisRes_form())), "Résultats manquants"))
+    if (is.null(ar@result) || nrow(ar@result) == 0L) {
+      return(ggplot2::ggplot() +
+               ggplot2::annotate("text", x = 0, y = 0, label = "Aucun terme enrichi") +
+               ggplot2::theme_void())
+    }
+    
+    df <- ar@result
+    k  <- min(as.integer(input$dotbarinput %||% 10L), nrow(df))
+    df <- df[seq_len(k), , drop = FALSE]
+    
+    if (identical(input$analysis_type, "gsea")) {
+      df$count <- 1L + stringr::str_count(df$core_enrichment, "/")
+      df$GeneRatio <- df$count / df$setSize
+      x_var   <- "GeneRatio"; size_var <- "count"
+    } else {
+      if ("GeneRatio" %in% names(df) && is.character(df$GeneRatio)) {
+        parts <- strsplit(df$GeneRatio, "/", fixed = TRUE)
+        num <- suppressWarnings(as.numeric(vapply(parts, `[`, 1, FUN.VALUE = character(1))))
+        den <- suppressWarnings(as.numeric(vapply(parts, `[`, 2, FUN.VALUE = character(1))))
+        df$GeneRatioNum <- ifelse(!is.na(num) & !is.na(den) & den > 0, num/den, NA_real_)
+        if (all(is.na(df$GeneRatioNum))) { x_var <- "Count"; size_var <- "Count"
+        } else { df$GeneRatio <- df$GeneRatioNum; x_var <- "GeneRatio"; size_var <- "Count" }
+      } else { x_var <- "Count"; size_var <- "Count" }
+    }
+    
+    df$Description <- gsub("_", " ", df$Description)
+    ord <- order(df$p.adjust, decreasing = FALSE, na.last = TRUE)
+    df <- df[ord, , drop = FALSE]
+    df$Description <- factor(df$Description, levels = df$Description)
+    
+    ggplot2::ggplot(
+      df,
+      ggplot2::aes(y = Description, x = .data[[x_var]], size = .data[[size_var]], color = p.adjust)
+    ) +
+      ggplot2::geom_point(alpha = 1) +
+      ggplot2::scale_y_discrete(labels = function(x) stringr::str_wrap(x, width = 70)) +
+      ggplot2::labs(x = if (x_var == "Count") "GeneCount" else "GeneRatio", y = NULL) +
+      ggplot2::guides(size = ggplot2::guide_legend(title = if (size_var == "count") "Core genes" else "GeneCount"),
+                      color = ggplot2::guide_colorbar(title = "FDR")) +
+      ggplot2::coord_flip() +
+      ggplot2::theme_bw(base_size = 14) +
+      ggplot2::theme(
+        axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1)  # labels X en biais
+      )
   })
+  
+  output$resdotplot <- renderPlot({ req(resdotplot()); resdotplot() })
+  #output$resdotplot_px <- renderUI({ plotOutput(outputId = ns("resdotplot"), height = dotbarplot_height()) })
+  
 
-  output$resdotplot <- renderPlot({
-    resdotplot()
-  })
-
+  
   output$resdotplot_px <- renderUI({
     plotOutput(outputId = ns("resdotplot"), height = dotbarplot_height())
   })
-
+  
+  # ============================ UI (dans ta box) ================================
+  boxPlus(
+    width = 12, collapsed = TRUE, collapsible = TRUE, solidHeader = TRUE, closable = FALSE,
+    status = "primary",
+    title = div(icon("file-image-o"), div(style="display:inline-block; padding-left: 5px","Enriched terms Plot")),
+    # Contrôles taille
+    div(style = "max-width: 520px; padding-left: 8px; display:flex; gap:12px; align-items:flex-end;",
+        numericInput(ns("plot_height"), "Hauteur (px)", value = 600, min = 300, max = 2000, step = 50),
+        sliderInput(ns("plot_width_pct"), "Largeur (%)", min = 60, max = 100, value = 100, width = "260px")  # << ajout
+    ),
+    sliderInput(ns("dotbarinput"), label = "Number of enriched terms", min = 2, max = 30, value = 10, width = "50%"),
+    tabBox(
+      width = 12,
+      tabPanel("Dotplot",
+               column(
+                 width = 12, p(), p(),
+                 p(tags$i("The Dotplot depicts ...")),
+                 uiOutput(ns("resdotplot_px")),
+                 p(), plotDownloadUI(ns("dotplotdownload"))
+               )
+      ),
+      tabPanel("Barplot",
+               column(
+                 width = 12, p(), p(),
+                 p(tags$i("The Bar plot depicts ...")),
+                 uiOutput(ns("resbarplot_px")),
+                 p(), plotDownloadUI(ns("barplotdownload"))
+               )
+      )
+    )
+  )
+  
+  # ============================ SERVER =========================================
+  # Hauteur dynamique
+  dotbarplot_height <- reactive({
+    h <- as.integer(input$plot_height %||% 600L)
+    paste0(max(350L, min(h, 2000L)), "px")
+  })
+  
+  # Largeur dynamique (en % du conteneur)
+  plot_width_style <- reactive({
+    w <- as.integer(input$plot_width_pct %||% 100L)
+    sprintf("width:%d%%; max-width: 100%%;", max(60L, min(w, 100L)))
+  })
+  
+  # DOTPLOT container: largeur + overflow visible + plotOutput width=100%
+  output$resdotplot_px <- renderUI({
+    tagList(
+      tags$style(HTML(sprintf("#%s { overflow: visible !important; }", ns("resdotplot")))),
+      div(
+        style = plot_width_style(),                                     # << largeur %
+        plotOutput(outputId = ns("resdotplot"), height = dotbarplot_height(), width = "100%")
+      )
+    )
+  })
+  
+  # BARPLOT container
+  output$resbarplot_px <- renderUI({
+    tagList(
+      tags$style(HTML(sprintf("#%s { overflow: visible !important; }", ns("resbarplot")))),
+      div(
+        style = plot_width_style(),                                     # << largeur %
+        plotOutput(outputId = ns("resbarplot"), height = dotbarplot_height(), width = "100%")
+      )
+    )
+  })
+  
   # Barplot ----
   resbarplot <- reactive({
     validate(need(!is.null((analysisRes <- analysisRes_form()@result)), ""))
@@ -1076,7 +1342,7 @@ moduleENRICHMENTAnalysis <- function(input, output, session, dataset, de, projec
       main = paste(data_heatmap()$Id, "gene expression")
     )
   })
-
+  
   output$render_heatmap <- renderPlot({
     heatmapplot()
   })

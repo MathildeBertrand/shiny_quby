@@ -226,7 +226,10 @@ moduleFS <- function(input, output, session, dataset, gobject, newsp) {
         )
     } else {
       p <- p +
-        geom_boxplot(aes(x = SampleGroup, outlier.colour = NULL, colour = SampleGroup), alpha = .5) +
+        geom_boxplot(aes(x = SampleGroup, outlier.colour = NULL, colour = SampleGroup),
+                     alpha = 0.5, outlier.shape = NA) +
+        geom_jitter(aes(x = SampleGroup, y = value, colour = SampleGroup),
+                    width = 0.15, size = 2, alpha = 0.7) +
         theme(axis.text.x = element_blank())
     }
     p <- p +

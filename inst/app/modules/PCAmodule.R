@@ -1,6 +1,41 @@
 # Ajout pour download PCA
 # Adaptation de la fonction download pour prise en charge dun objet ggplot2
+plotDownloadPCAUI <- function(id, label = "Download PCA plot") {
+  ns <- NS(id)
+  downloadButton(ns("downloadplot"), label)
+}
 
+plotDownloadPCA <- function(input, output, session, dataplot, filename = paste0("PCA_plot_", Sys.Date()), plottype) {
+  
+  output$downloadplot <- downloadHandler(
+    filename = function() {
+      paste0(filename, ".", plottype())
+    },
+    content = function(file) {
+      width <- 12
+      height <- 8
+      
+      plot_obj <- dataplot()
+      
+      if (is.null(plot_obj) || !inherits(plot_obj, "gg")) {
+        warning("No valid ggplot object to export.")
+        file.create(file)  # Fichier vide, évite crash
+        return()
+      }
+      
+      if (plottype() == "png") {
+        png(file, width = width, height = height, units = "in", res = 150)
+        print(plot_obj)
+        dev.off()
+      } else {
+        pdf(file, width = width, height = height)
+        print(plot_obj)
+        dev.off()
+      }
+    }
+  )
+}
+#
 
 ############################### MAIN PCA module    ###############################
 modulePCAUI <- function(id, label = "PCA module") {
@@ -389,6 +424,7 @@ modulePCA <- function(input, output, session, gobject, dataset, de, newsp) {
           p <- p +
             theme(plot.title = element_text(size = rel(1.2), lineheight = 2, vjust = 1, face = "bold"), panel.border = element_rect(colour = "grey50", fill = NA), axis.text = element_text(size = rel(.7))) +
             scale_color_manual(values = gobject()$default.colors, drop = T) +
+            
             scale_shape_discrete(drop = FALSE) +
             xlab(paste(paste0("PC#", L[[i]][1]), paste0("(", pca$variance[L[[i]][1]], "%)"))) +
             ylab(paste(paste0("PC#", L[[i]][2]), paste0("(", pca$variance[L[[i]][2]], "%)")))
@@ -666,7 +702,7 @@ plotlyPCA2D <- function(input, output, session,
     }
     
     colors <- gobject()$default.colors[levels(df$SampleGroup <- factor(df$SampleGroup))]
-    
+
     plt <- plot_ly(
       data = df,
       x = as.formula(paste0("~", pc_pairs[1])),
