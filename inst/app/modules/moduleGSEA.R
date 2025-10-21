@@ -297,7 +297,7 @@ moduleENRICHMENTAnalysis <- function(input, output, session, dataset, de, projec
         tx <- "<i>Gene sets from pathway databases. Usually, these gene sets are canonical representations of a biological process compiled by domain experts.</i>"
       } else if (input$select_GMT == "C2.CP:BIOCARTA") {
         tx <- "<i>Canonical Pathways gene sets derived from the BioCarta pathway database.</i>"
-      } else if (input$select_GMT == "C2.CP:KEGG_MEDICUS") {
+      } else if (input$select_GMT == "C2.CP:KEGG_LEGACY") {
         tx <- "<i>Canonical Pathways gene sets derived from the KEGG pathway database.</i>"
       } else if (input$select_GMT == "C2.CP:PID") {
         tx <- "<i>Canonical Pathways gene sets derived from the Pathway Interaction Database.</i>"
@@ -1494,4 +1494,5 @@ moduleENRICHMENTAnalysis <- function(input, output, session, dataset, de, projec
   
   return(rlist)
 }
+
 
