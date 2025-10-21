@@ -995,7 +995,10 @@ moduleDE <- function(input, output, session, dataset, newsp, project) {
     },
     content <- function(file) {
       width <- 10
-      height <- 8
+     # height <- 8
+      n_genes <- nrow(hmap()$gtable)
+      n_genes <- length(rownames(de_mark_results()))
+      height <- max(8, min(0.05 * n_genes, 15)) 
       if (input$de_export_plot_type == "png") {
         png(file, width = width, height = height, units = "in", res = 150)
       } else {
