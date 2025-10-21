@@ -2,7 +2,7 @@ APPLI shiny analyse RNA Seq QUBY from DAC ICM :
 >* https://gitlab.com/icm-institute/dac/public/quby_tutorials/-/blob/main/Quby_Bulk.md?ref_type=heads
 >* https://gitlab.com/icm-institute/dac/web/qubyrsq
 
-Repo avec correction bug sur les ACP 
+Repo avec correction bug sur les ACP, modification de certains plots et correction de la sélection des pathways pour enrichissement sur KEGG
 
 # QubyRSQ: Interactive web-based application for trascriptomics data exploration and analysis
 
