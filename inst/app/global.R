@@ -72,7 +72,7 @@ db_choices <- list(
   "   CGP: chemical and genetic perturbations" = "C2.CGP",
   "   CP: Canonical pathways" = "C2.CP",
   "   CP:BIOCARTA: BioCarta gene sets" = "C2.CP:BIOCARTA",
-  "   CP:KEGG_MEDICUS: KEGG gene sets" = "C2.CP:KEGG_MEDICUS",
+  "   CP:KEGG_LEGACY: KEGG gene sets" = "C2.CP:KEGG_LEGACY",
   "   CP:PID: Pathway Interaction Database" = "C2.CP:PID",
   "   CP:REACTOME: Reactome gene sets" = "C2.CP:REACTOME",
   "   CP:WIKIPATHWAYS: WikiPathways" = "C2.CP:WIKIPATHWAYS",
